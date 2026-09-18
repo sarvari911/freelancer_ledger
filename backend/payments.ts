@@ -3,57 +3,52 @@ import { GetCommand, PutCommand, DeleteCommand, QueryCommand } from '@aws-sdk/li
 import { randomUUID } from 'crypto';
 import { db } from './db';
 import { success, error } from './responses';
+import { getUserId } from './auth';
 
 const PAYMENTS_TABLE = process.env.PAYMENTS_TABLE!;
 const INVOICES_TABLE = process.env.INVOICES_TABLE!;
-const MOCK_USER_ID = 'demo-user-1';
 
 export const handler: APIGatewayProxyHandler = async (event) => {
   const method = event.httpMethod;
   const invoiceId = event.pathParameters?.invoiceId;
   const paymentId = event.pathParameters?.paymentId;
+  const userId = getUserId(event);
 
   try {
-    // GET /invoices/{invoiceId}/payments
     if (method === 'GET' && invoiceId) {
       const { Items } = await db.send(new QueryCommand({
         TableName: PAYMENTS_TABLE,
         KeyConditionExpression: 'userId = :u',
         FilterExpression: 'invoiceId = :i',
-        ExpressionAttributeValues: { ':u': MOCK_USER_ID, ':i': invoiceId }
+        ExpressionAttributeValues: { ':u': userId, ':i': invoiceId }
       }));
       return success(Items || []);
     }
 
-    // POST /invoices/{invoiceId}/payments
     if (method === 'POST' && invoiceId) {
       const body = JSON.parse(event.body || '{}');
       const newPaymentAmount = body.amountMinor || 0;
 
-      // 1. Fetch the invoice to check the total
       const { Item: invoice } = await db.send(new GetCommand({
         TableName: INVOICES_TABLE,
-        Key: { userId: MOCK_USER_ID, invoiceId }
+        Key: { userId, invoiceId }
       }));
       if (!invoice) return error(404, 'Invoice not found');
 
-      // 2. Fetch existing payments to calculate what has already been paid
       const { Items: payments } = await db.send(new QueryCommand({
         TableName: PAYMENTS_TABLE,
         KeyConditionExpression: 'userId = :u',
         FilterExpression: 'invoiceId = :i',
-        ExpressionAttributeValues: { ':u': MOCK_USER_ID, ':i': invoiceId }
+        ExpressionAttributeValues: { ':u': userId, ':i': invoiceId }
       }));
       const totalPaidSoFar = (payments || []).reduce((sum, p) => sum + (p.amountMinor || 0), 0);
 
-      // 3. Prevent overpayment
       if (totalPaidSoFar + newPaymentAmount > invoice.amountMinor) {
         return error(400, 'Payment would exceed invoice total');
       }
 
-      // 4. Save the payment
       const newPayment = {
-        userId: MOCK_USER_ID,
+        userId,
         paymentId: randomUUID(),
         invoiceId,
         amountMinor: newPaymentAmount,
@@ -63,11 +58,10 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       return success(newPayment, 201);
     }
 
-    // DELETE /payments/{paymentId}
     if (method === 'DELETE' && paymentId) {
       await db.send(new DeleteCommand({
         TableName: PAYMENTS_TABLE,
-        Key: { userId: MOCK_USER_ID, paymentId }
+        Key: { userId, paymentId }
       }));
       return success({ deleted: true });
     }

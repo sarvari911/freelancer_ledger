@@ -3,35 +3,34 @@ import { GetCommand, PutCommand, DeleteCommand, QueryCommand, UpdateCommand } fr
 import { randomUUID } from 'crypto';
 import { db } from './db';
 import { success, error } from './responses';
+import { getUserId } from './auth';
 
 const TABLE_NAME = process.env.INVOICES_TABLE!;
-const MOCK_USER_ID = 'demo-user-1'; 
 
 export const handler: APIGatewayProxyHandler = async (event) => {
   const method = event.httpMethod;
   const invoiceId = event.pathParameters?.invoiceId;
   const clientId = event.pathParameters?.clientId;
+  const userId = getUserId(event);
 
   try {
-    // GET /clients/{clientId}/invoices
     if (method === 'GET' && clientId && !invoiceId) {
       const { Items } = await db.send(new QueryCommand({
         TableName: TABLE_NAME,
         KeyConditionExpression: 'userId = :u',
         FilterExpression: 'clientId = :c',
-        ExpressionAttributeValues: { ':u': MOCK_USER_ID, ':c': clientId }
+        ExpressionAttributeValues: { ':u': userId, ':c': clientId }
       }));
       return success(Items || []);
     }
 
-    // POST /clients/{clientId}/invoices
     if (method === 'POST' && clientId) {
       const body = JSON.parse(event.body || '{}');
       const newInvoice = {
-        userId: MOCK_USER_ID,
+        userId,
         invoiceId: randomUUID(),
-        clientId: clientId,
-        amountMinor: body.amountMinor || 0, // Cents/minor units only
+        clientId,
+        amountMinor: body.amountMinor || 0,
         status: 'draft',
         dueDate: body.dueDate,
         description: body.description,
@@ -41,21 +40,19 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       return success(newInvoice, 201);
     }
 
-    // GET /invoices/{invoiceId}
     if (method === 'GET' && invoiceId) {
       const { Item } = await db.send(new GetCommand({
         TableName: TABLE_NAME,
-        Key: { userId: MOCK_USER_ID, invoiceId }
+        Key: { userId, invoiceId }
       }));
       return Item ? success(Item) : error(404, 'Invoice not found');
     }
 
-    // PUT /invoices/{invoiceId}
     if (method === 'PUT' && invoiceId) {
       const body = JSON.parse(event.body || '{}');
       const { Attributes } = await db.send(new UpdateCommand({
         TableName: TABLE_NAME,
-        Key: { userId: MOCK_USER_ID, invoiceId },
+        Key: { userId, invoiceId },
         UpdateExpression: 'set #s = :s, amountMinor = :a',
         ExpressionAttributeNames: { '#s': 'status' },
         ExpressionAttributeValues: { ':s': body.status, ':a': body.amountMinor },
@@ -64,11 +61,10 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       return success(Attributes);
     }
 
-    // DELETE /invoices/{invoiceId}
     if (method === 'DELETE' && invoiceId) {
       await db.send(new DeleteCommand({
         TableName: TABLE_NAME,
-        Key: { userId: MOCK_USER_ID, invoiceId }
+        Key: { userId, invoiceId }
       }));
       return success({ deleted: true });
     }

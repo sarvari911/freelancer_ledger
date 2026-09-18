@@ -2,29 +2,28 @@ import { APIGatewayProxyHandler } from 'aws-lambda';
 import { QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { db } from './db';
 import { success, error } from './responses';
+import { getUserId } from './auth';
 
 const INVOICES_TABLE = process.env.INVOICES_TABLE!;
 const PAYMENTS_TABLE = process.env.PAYMENTS_TABLE!;
-const MOCK_USER_ID = 'demo-user-1';
 
 export const handler: APIGatewayProxyHandler = async (event) => {
   const clientId = event.pathParameters?.clientId;
   if (!clientId) return error(400, 'Missing clientId');
+  const userId = getUserId(event);
 
   try {
-    // 1. Get all invoices for this client
     const { Items: invoices } = await db.send(new QueryCommand({
       TableName: INVOICES_TABLE,
       KeyConditionExpression: 'userId = :u',
       FilterExpression: 'clientId = :c',
-      ExpressionAttributeValues: { ':u': MOCK_USER_ID, ':c': clientId }
+      ExpressionAttributeValues: { ':u': userId, ':c': clientId }
     }));
 
-    // 2. Get all payments across the entire user account
     const { Items: allPayments } = await db.send(new QueryCommand({
       TableName: PAYMENTS_TABLE,
       KeyConditionExpression: 'userId = :u',
-      ExpressionAttributeValues: { ':u': MOCK_USER_ID }
+      ExpressionAttributeValues: { ':u': userId }
     }));
 
     let totalInvoiced = 0;
@@ -33,7 +32,6 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     let totalOverdue = 0;
     const now = new Date().toISOString();
 
-    // 3. Calculate ledger totals
     for (const inv of invoices || []) {
       if (inv.status === 'cancelled') continue;
 
@@ -45,11 +43,8 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       totalInvoiced += invAmount;
       totalPaid += paidForInv;
 
-      // Drafts don't count as outstanding because they haven't been sent to the client yet
       if (inv.status !== 'draft') {
         totalOutstanding += balance;
-        
-        // If they still owe money and the due date has passed
         if (balance > 0 && inv.dueDate && inv.dueDate < now) {
           totalOverdue += balance;
         }
