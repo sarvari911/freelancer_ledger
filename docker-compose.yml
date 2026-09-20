@@ -1,23 +1,33 @@
-version: "3.9"
-
 services:
   localstack:
-    container_name: freelancer-ledger-localstack
-    image: localstack/localstack:3.8
+    container_name: localstack_main
+    image: localstack/localstack:3.8.0
     ports:
-      - "4566:4566"
+      - "127.0.0.1:4566:4566"
+      - "127.0.0.1:4510-4559:4510-4559"
     environment:
-      - SERVICES=dynamodb,s3
-      - DEFAULT_REGION=us-east-1
-      - AWS_DEFAULT_REGION=us-east-1
-      - DEBUG=0
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
     volumes:
-      - "./.localstack:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh"
+
   opensearch:
     image: opensearchproject/opensearch:2.11.0
+    container_name: opensearch-local
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-node1
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - DISABLE_SECURITY_PLUGIN=true
     ports:
       - "9200:9200"
-    environment:
-      - discovery.type=single-node
-      - DISABLE_SECURITY_PLUGIN=true
+      - "9600:9600"
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+
+volumes:
+  opensearch-data:
