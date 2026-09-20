@@ -3,6 +3,11 @@ Transform: AWS::Serverless-2016-10-31
 Description: Freelancer Ledger Local Infrastructure
 
 Globals:
+  Api:
+    Cors:
+      AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      AllowHeaders: "'Content-Type,x-user-id,Authorization'"
+      AllowOrigin: "'*'"
   Function:
     Timeout: 10
     Runtime: nodejs18.x
@@ -13,7 +18,10 @@ Globals:
         CLIENTS_TABLE: freelancer-ledger-clients-local
         INVOICES_TABLE: freelancer-ledger-invoices-local
         PAYMENTS_TABLE: freelancer-ledger-payments-local
-
+        PDF_BUCKET: freelancer-ledger-pdfs-local
+        OPENSEARCH_ENDPOINT: http://host.docker.internal:9200
+        S3_ENDPOINT: http://host.docker.internal:4566
+        
 Resources:
   # --- DYNAMODB TABLES ---
   ClientsTable:
@@ -220,3 +228,70 @@ Resources:
         Target: es2020
         EntryPoints:
           - ledger.ts
+
+  SearchFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: search.handler
+      Events:
+        SearchInvoices:
+          Type: Api
+          Properties:
+            Path: /search/invoices
+            Method: get
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: false
+        Target: es2020
+        EntryPoints:
+          - search.ts
+
+  PdfFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: pdf.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref InvoicesTable
+        - S3CrudPolicy:
+            BucketName: freelancer-ledger-pdfs-local
+      Events:
+        GeneratePdf:
+          Type: Api
+          Properties:
+            Path: /invoices/{invoiceId}/pdf
+            Method: post
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: false
+        Target: es2020
+        EntryPoints:
+          - pdf.ts
+
+  OverdueScanFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: overdue.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref InvoicesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref PaymentsTable
+      Events:
+        RunOverdueScan:
+          Type: Api
+          Properties:
+            Path: /invoices/overdue-scan
+            Method: post
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: false
+        Target: es2020
+        EntryPoints:
+          - overdue.ts
