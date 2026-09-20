@@ -6,7 +6,7 @@ Built to simulate a production-grade AWS serverless architecture locally using *
 
 ---
 
-## 🚀 Tech Stack
+##  Tech Stack
 
 * **Frontend:** React, Vite, TypeScript
 * **Backend:** AWS SAM CLI, AWS Lambda (Node.js/TypeScript), REST API Gateway
@@ -19,7 +19,7 @@ Built to simulate a production-grade AWS serverless architecture locally using *
 
 ---
 
-## 🏗️ Architecture Overview
+##  Architecture Overview
 
 ```text
                     ┌───────────────────────────┐
@@ -93,7 +93,7 @@ Backend validation prevents users from recording a payment greater than an invoi
 
 OpenSearch indexes invoice descriptions and provides fast keyword-based search across invoices.
 
-### 📄 S3 Pre-Signed Statements
+###  S3 Pre-Signed Statements
 
 Generate invoice statements and receive temporary pre-signed S3 URLs for secure statement downloads.
 
@@ -249,7 +249,7 @@ Request body:
 
 ---
 
-## 🧾 Invoice Routes
+##  Invoice Routes
 
 | Method | Endpoint                       | Description                            |
 | ------ | ------------------------------ | -------------------------------------- |
@@ -354,7 +354,7 @@ This makes it possible to develop and test an AWS-style serverless application w
 ---
 
 
-# 🎯 Project Goals
+#  Project Goals
 
 Freelancer Ledger demonstrates how a production-style financial application can be designed using:
 
